@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Servo.h>
+#include <L298N.h>
 // #include <L298N.h>
 
 #define SERVO_A_PIN 3
@@ -8,6 +9,10 @@
 
 #define SERVO_TIME_MIN  500
 #define SERVO_TIME_MAX  2500
+
+const unsigned int IN1 = 12;
+const unsigned int IN2 = 11;
+const unsigned int EN = 10;
 
 // Pin definition
 // const unsigned int IN1 = 7;
@@ -22,11 +27,18 @@
 //   int x,y,z;
 // };
 
+L298N motor(EN, IN1, IN2);
+
 Servo servoA;
 Servo servoB;
 Servo servoC;
 
-typedef struct
+struct Card
+{
+  float a;
+};
+
+typedef struct Vector3_s
 {
   float x,y,z;
 } Vector3;
@@ -63,8 +75,21 @@ Servo_Angles set_pos( Vector3 pos )
   return servo;
 }
 
+void demo_pomp()
+{
+  
+  motor.setSpeed(255);
+  motor.forward();
+  //delay(5000);
+  //motor.forward();
+  delay(1000);
+  //motor.stop();
+}
+
 void demo()
 {
+  
+
   Servo_Angles angles;
   Vector3 pos;
 
@@ -115,10 +140,12 @@ void demo()
 }
 
 void setup() {
+
+
   Serial.begin(9600);
   
   Serial.println("Start");
-
+  
   //motor.setSpeed(255);
   //motor.forward();
 
@@ -132,6 +159,6 @@ void setup() {
 void loop() {
   delay(100);
   
-  demo();
+  demo_pomp();
   
 }
