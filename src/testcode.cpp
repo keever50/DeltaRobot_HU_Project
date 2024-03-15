@@ -38,10 +38,11 @@ struct Card
   float a;
 };
 
-typedef struct Vector3_s
+typedef struct
 {
   float x,y,z;
 } Vector3;
+
 
 typedef struct
 {
@@ -86,6 +87,22 @@ void demo_pomp()
   //motor.stop();
 }
 
+Vector3 ask_coords()
+{
+  Serial.setTimeout(999999);
+  Vector3 vect;
+  String str;
+  Serial.println("Enter coords:\n");
+  Serial.print("X: ");
+  vect.x=atoi(Serial.readStringUntil('\n').c_str());
+  Serial.print("Y: ");
+  vect.y=atoi(Serial.readStringUntil('\n').c_str());
+  Serial.print("Z: ");
+  vect.z=atoi(Serial.readStringUntil('\n').c_str());
+  Serial.println("Done\n");
+  return vect;
+}
+
 void demo()
 {
   
@@ -96,11 +113,11 @@ void demo()
   delay(1000);
   for(int i=0;i<40;i+=1)
   {
-    delay(50);
+    delay(100);
 
     pos.z=70+i;
     pos.y=0;
-    pos.x=50;
+    pos.x=45;
     angles=set_pos(pos);
 
     servoA.write(angles.a);
@@ -111,8 +128,8 @@ void demo()
   delay(1000);
 
   pos.z=50;
-  pos.y=-50;
-  pos.x=-50;
+  pos.y=-10;
+  pos.x=-10;
   angles=set_pos(pos);
 
   servoA.write(angles.a);
@@ -120,12 +137,12 @@ void demo()
   servoC.write(angles.c);  
 
   delay(1000);
-  for(int i=0;i<40;i+=1)
+  for(int i=0;i<40;i+=10)
   {
-    delay(50);
+    delay(200);
 
     pos.z=70+i;
-    pos.y=50;
+    pos.y=45;
     pos.x=0;
     angles=set_pos(pos);
 
@@ -139,11 +156,54 @@ void demo()
 
 }
 
-void setup() {
 
+void demo2()
+{
+  Vector3 pos;
+  pos.z=100;
+  pos.y=-50;
+  pos.x=0;
+  Servo_Angles angles=set_pos(pos);
+
+  servoA.write(angles.a);
+  servoB.write(angles.b);
+  servoC.write(angles.c);   
+
+  delay(1000);
+  pos.z=100;
+  pos.y=50;
+  pos.x=0;
+  angles=set_pos(pos);
+
+  servoA.write(angles.a);
+  servoB.write(angles.b);
+  servoC.write(angles.c);   
+
+  delay(1000);
+}
+
+void demo3()
+{
+  while(true)
+  {
+    Vector3 vect = ask_coords();
+    Servo_Angles angles = set_pos(vect);
+    servoA.write(angles.a);
+    servoB.write(angles.b);
+    servoC.write(angles.c);   
+
+    delay(1500); 
+  }
+}
+
+
+
+void setup() {
+  while(!Serial);
 
   Serial.begin(9600);
   
+
   Serial.println("Start");
   
   //motor.setSpeed(255);
@@ -158,7 +218,8 @@ void setup() {
 
 void loop() {
   delay(100);
-  
-  demo_pomp();
+  //demo2();
+  //demo_pomp();
+  demo3();
   
 }
