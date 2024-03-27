@@ -3,6 +3,28 @@
 #include <SPI.h>
 #include <Wire.h>
 #include <Servo.h>
+#include <L298N.h>
+void shrek();
+
+/*Overflow sensor*/
+#define SENSOR_OVERFLOW 12
+
+/*Tank*/
+#define SENSOR_TANK_LOW 13
+
+/*Pump*/
+#define PUMP_IN1    14
+#define PUMP_IN2    15
+
+/*Scanner*/
+#define RC522_CS    53
+#define RC522_RST   3
+
+/*Buttons*/
+#define BUTTON_START    9
+
+/*Pump*/
+L298N motor(PUMP_IN1, PUMP_IN2);
 
 /*Servos*/
 #define SERVO_A_PIN 30
@@ -16,8 +38,6 @@ Servo servoB;
 Servo servoC;
 
 /*Scanner*/
-#define RC522_CS    53
-#define RC522_RST   3
 MFRC522 rfid(RC522_CS, RC522_RST);
 
 #define CARDLIST_UID_MAX_LEN    4
@@ -83,14 +103,34 @@ void set_servos(Servo_Angles angs)
 
 void move_to(Vector3 pos)
 {
-    Servo_Angles angs = set_pos({0,0,150});
     Serial.println("Going to: ");
     Serial.println(pos.x);
     Serial.println(pos.y);
     Serial.println(pos.z);
+
+    Servo_Angles angs = set_pos({0,0,140});
+    set_servos(angs);
     delay(2000);
 
+    angs = set_pos({pos.x,pos.y,120});
+    set_servos(angs);
+    delay(2000);    
 
+    angs = set_pos({pos.x,pos.y,pos.z});
+    set_servos(angs);
+    delay(2000);    
+}
+
+void move_home(Vector3 pos)
+{
+    Serial.println("Moving back home");
+    Servo_Angles angs = set_pos({pos.x,pos.y,130});
+    set_servos(angs);
+    delay(2000);  
+
+    angs = set_pos({0,0,150});
+    set_servos(angs);
+    delay(2000);   
 
 }
 
@@ -125,12 +165,15 @@ int scan_card()
     return 0;
 }
 
-#define STATE_INIT  -1
-#define STATE_IDLE  0
-#define STATE_READ  1
+#define STATE_INIT            -1
+#define STATE_IDLE              0
+#define STATE_READ              1
+#define STATE_MOVING            2
+#define STATE_INJECT            3
 struct 
 {
     int state=STATE_INIT;
+    int ID;
 }
 bot_sm_vars;
 
@@ -147,8 +190,11 @@ void bot_statemachine()
             pinMode(RC522_CS, OUTPUT);
             rfid.PCD_Init(); // Init MFRC522
 
+            move_to({0,0,150});
+
             Serial.println("Now scanning for cards...");
             bot_sm_vars.state = STATE_IDLE;
+
             break;
         }
 
@@ -185,18 +231,42 @@ void bot_statemachine()
             }          
 
             Serial.println("READING");
-            int ID = find_card();
+            bot_sm_vars.ID = find_card();
             /*Card not found*/
-            if(ID==-1) 
+            if(bot_sm_vars.ID==-1) 
             {
                 Serial.println("Card not found in database");
                 bot_sm_vars.state=STATE_IDLE;
                 break;
             }
             /*Card found*/
-            move_to(coords[ID]);
+            bot_sm_vars.state=STATE_MOVING;
+            break;
+        }
 
+        case STATE_MOVING:
+        {
+            /*Indicate position*/
 
+            /*Wait till in position*/
+
+            /*Wait till start*/
+            if(digitalRead(BUTTON_START)) break;
+            move_to(coords[bot_sm_vars.ID]);
+            bot_sm_vars.state=STATE_INJECT;
+
+            break;
+        }
+
+        case STATE_INJECT:
+        {
+            Serial.println("Injecting...");
+            motor.forward();
+            motor.setSpeed(255);
+            delay(4000);
+            motor.stop();
+            delay(1000);
+            move_home(coords[bot_sm_vars.ID]);
             bot_sm_vars.state=STATE_IDLE;
             break;
         }
@@ -205,17 +275,48 @@ void bot_statemachine()
 
 void setup()
 {
+
     Serial.begin(9600);
     while(!Serial);
+    shrek();
     SPI.begin(); // Init SPI bus
-        
-  servoA.attach(SERVO_A_PIN,SERVO_TIME_MIN, SERVO_TIME_MAX);
-  servoB.attach(SERVO_B_PIN,SERVO_TIME_MIN, SERVO_TIME_MAX);
-  servoC.attach(SERVO_C_PIN,SERVO_TIME_MIN, SERVO_TIME_MAX);
+
+    pinMode(BUTTON_START, INPUT_PULLUP);    
+
+    servoA.attach(SERVO_A_PIN,SERVO_TIME_MIN, SERVO_TIME_MAX);
+    servoB.attach(SERVO_B_PIN,SERVO_TIME_MIN, SERVO_TIME_MAX);
+    servoC.attach(SERVO_C_PIN,SERVO_TIME_MIN, SERVO_TIME_MAX);
 }
 
 void loop()
 {
     bot_statemachine();
     delay(5);
+}
+
+void shrek()
+{
+        Serial.println(F("⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣤⣤⣤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"));
+    Serial.println(F("⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣀⠀⠀⠀⢀⣴⠟⠉⠀⠀⠀⠈⠻⣦⡀⠀⠀⠀⣤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"));
+    Serial.println(F("⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣷⣀⢀⣾⠿⠻⢶⣄⠀⠀⣠⣶⡿⠶⣄⣠⣾⣿⠗⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"));
+    Serial.println(F("⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠉⢻⣿⣿⡿⣿⠿⣿⡿⢼⣿⣿⡿⣿⣎⡟⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"));
+    Serial.println(F("⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⡟⠉⠛⢛⣛⡉⠀⠀⠙⠛⠻⠛⠑⣷⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"));
+    Serial.println(F("⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⣀⣟⠻⢦⣀⡀⠀⠀⠀⠀⣀⡈⠻⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"));
+    Serial.println(F("⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣼⡿⠉⡇⠀⠀⠛⠛⠛⠋⠉⠉⠀⠀⠀⠹⢧⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀"));
+    Serial.println(F("⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣾⡟⠀⢦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠃⠀⠈⠑⠪⠷⠤⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀"));
+    Serial.println(F("⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣾⣿⣿⣿⣦⣼⠛⢦⣤⣄⡀⠀⠀⠀⠀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠑⠢⡀⠀⠀⠀⠀⠀"));
+    Serial.println(F("⠀⠀⠀⠀⠀⠀⠀⢀⣠⠴⠲⠖⠛⠻⣿⡿⠛⠉⠉⠻⠷⣦⣽⠿⠿⠒⠚⠋⠉⠁⡞⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⢦⠀⠀⠀⠀"));
+    Serial.println(F("⠀⠀⠀⠀⠀⢀⣾⠛⠁⠀⠀⠀⠀⠀⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠤⠒⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⢣⠀⠀⠀"));
+    Serial.println(F("⠀⠀⠀⠀⣰⡿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣑⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⡇⠀⠀"));
+    Serial.println(F("⠀⠀⠀⣰⣿⣁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣷⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣾⣧⣄⠀⠀⠀⠀⠀⠀⢳⡀⠀"));
+    Serial.println(F("⠀⠀⠀⣿⡾⢿⣀⢀⣀⣦⣾⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣾⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡰⣫⣿⡿⠟⠻⠶⠀⠀⠀⠀⠀⢳⠀"));
+    Serial.println(F("⠀⠀⢀⣿⣧⡾⣿⣿⣿⣿⣿⡷⣶⣤⡀⠀⠀⠀⠀⠀⠀⠀⢀⡴⢿⣿⣧⠀⡀⠀⢀⣀⣀⢒⣤⣶⣿⣿⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⡇"));
+    Serial.println(F("⠀⣸⠃⠀⠀⢸⠃⠀⠀⢸⣿⣿⣿⣿⣿⣿⣷⣾⣿⣿⠟⡉⠀⠀⠀⠈⠙⠛⠻⢿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡇"));
+    Serial.println(F("⠀⣿⠀⠀⢀⡏⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⣿⠿⠿⠛⠛⠉⠁⠀⠀⠀⠀⠀⠉⠠⠿⠟⠻⠟⠋⠉⢿⣿⣦⡀⢰⡀⠀⠀⠀⠀⠀⠀⠁"));
+    Serial.println(F("⢀⣿⡆⢀⡾⠀⠀⠀⠀⣾⠏⢿⣿⣿⣿⣯⣙⢷⡄⠀⠀⠀⠀⠀⢸⡄⠀⠀⠀⠀⠀⠀⠀⠀⢀⣤⣿⣻⢿⣷⣀⣷⣄⠀⠀⠀⠀⢸⠀"));
+    Serial.println(F("⢸⠃⠠⣼⠃⠀⠀⣠⣾⡟⠀⠈⢿⣿⡿⠿⣿⣿⡿⠿⠿⠿⠷⣄⠈⠿⠛⠻⠶⢶⣄⣀⣀⡠⠈⢛⡿⠃⠈⢿⣿⣿⡿⠀⠀⠀⠀⠀⡀"));
+    Serial.println(F("⠟⠀⠀⢻⣶⣶⣾⣿⡟⠁⠀⠀⢸⣿⢅⠀⠈⣿⡇⠀⠀⠀⠀⠀⣷⠂⠀⠀⠀⠀⠐⠋⠉⠉⠀⢸⠁⠀⠀⠀⢻⣿⠛⠀⠀⠀⠀⢀⠇"));
+    Serial.println(F("⠀⠀⠀⠀⠹⣿⣿⠋⠀⠀⠀⠀⢸⣧⠀⠰⡀⢸⣷⣤⣤⡄⠀⠀⣿⡀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡆⠀⠀⠀⠀⡾⠀⠀⠀⠀⠀⠀⢼⡇"));
+    Serial.println(F("⠀⠀⠀⠀⠀⠙⢻⠄⠀⠀⠀⠀⣿⠉⠀⠀⠈⠓⢯⡉⠉⠉⢱⣶⠏⠙⠛⠚⠁⠀⠀⠀⠀⠀⣼⠇⠀⠀⠀⢀⡇⠀⠀⠀⠀⠀⠀⠀⡇"));
+    Serial.println(F("⠀⠀⠀⠀⠀⠀⠻⠄⠀⠀⠀⢀⣿⠀⢠⡄⠀⠀⠀⣁⠁⡀⠀⢠⠀⠀⠀⠀⠀⠀⠀⠀⢀⣐⡟⠀⠀⠀⠀⢸⡇⠀⠀⠀⠀⠀⠀⢠⡇"));
 }
